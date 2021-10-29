@@ -1,4 +1,4 @@
-package ru.mrroot.translator.view.main
+package ru.mrroot.translator.view.history
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import ru.mrroot.translator.model.entity.AppState
 import kotlinx.coroutines.*
 
-class MainViewModel(private val interactor: MainInteractor) : ViewModel() {
+class HistoryViewModel(private val interactor: HistoryInteractor) : ViewModel() {
 
     private val liveData: MutableLiveData<AppState> = MutableLiveData()
     private val viewModelCoroutineScope = CoroutineScope(
@@ -20,9 +20,7 @@ class MainViewModel(private val interactor: MainInteractor) : ViewModel() {
         viewModelCoroutineScope.coroutineContext.cancelChildren()
     }
 
-    fun getLiveData(): LiveData<AppState> {
-        return liveData
-    }
+    fun getLiveData(): LiveData<AppState> = liveData
 
     override fun onCleared() {
         super.onCleared()
@@ -34,14 +32,10 @@ class MainViewModel(private val interactor: MainInteractor) : ViewModel() {
         liveData.postValue(AppState.Error(error))
     }
 
-    fun getData(word: String, isOnline: Boolean) {
-        if (word.isNullOrEmpty()) {
-            return
-        }
-
+    fun getData() {
         liveData.value = AppState.Loading(null)
         cancelJob()
-        viewModelCoroutineScope.launch { liveData.postValue(interactor.getData(word)) }
+        viewModelCoroutineScope.launch { liveData.postValue(interactor.getHistory()) }
     }
 
 }

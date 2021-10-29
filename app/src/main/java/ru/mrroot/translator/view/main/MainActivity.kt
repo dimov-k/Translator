@@ -3,33 +3,31 @@ package ru.mrroot.translator.view.main
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View.GONE
 import android.view.View.VISIBLE
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import ru.mrroot.translator.R
-import ru.mrroot.translator.app.App
 import ru.mrroot.translator.databinding.ActivityMainBinding
-import ru.mrroot.translator.model.data.AppState
-import ru.mrroot.translator.model.data.DataModel
+import ru.mrroot.translator.model.entity.AppState
+import ru.mrroot.translator.model.entity.Word
 import ru.mrroot.translator.utils.ui.AlertDialogFragment
 import ru.mrroot.translator.view.base.View
-import ru.mrroot.translator.view.main.adapter.MainAdapter
-import javax.inject.Inject
+import ru.mrroot.translator.view.description.DescriptionFragment
+import ru.mrroot.translator.view.history.HistoryFragment
+import org.koin.android.viewmodel.ext.android.viewModel
 
 class MainActivity : AppCompatActivity(), View {
 
-    @Inject
-    lateinit var viewModelFactory: ViewModelProvider.Factory
-    private lateinit var viewModel: MainViewModel
+    private val viewModel: MainViewModel by viewModel()
     private val adapter: MainAdapter by lazy { MainAdapter(listItemClickListener) }
     private var _binding: ActivityMainBinding? = null
     private val vb get() = _binding!!
 
-    private val listItemClickListener: (DataModel) -> Unit = { data ->
-        Toast.makeText(this@MainActivity, data.text, Toast.LENGTH_SHORT).show()
+    private val listItemClickListener: (Word) -> Unit = { word ->
+            toDescriptionScreen(word)
     }
 
     private val textWatcher = object : TextWatcher {
@@ -52,18 +50,13 @@ class MainActivity : AppCompatActivity(), View {
         _binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(vb.root)
 
-        App.instance.appComponent.inject(this)
-
-        viewModel = viewModelFactory.create(MainViewModel::class.java)
         viewModel.getLiveData().observe(this@MainActivity, { renderData(it) })
 
         vb.mainActivityRv.layoutManager = LinearLayoutManager(applicationContext)
         vb.mainActivityRv.adapter = adapter
 
         vb.searchEditText.addTextChangedListener(textWatcher)
-
         vb.clearTextImageView.setOnClickListener { vb.searchEditText.text = null }
-
         vb.searchButton.setOnClickListener {
             viewModel.getData(vb.searchEditText.text.toString(), true)
         }
@@ -71,9 +64,9 @@ class MainActivity : AppCompatActivity(), View {
 
     override fun renderData(appState: AppState) {
         when (appState) {
-            is AppState.Success -> {
+            is AppState.Success<*> -> {
                 showViewWorking()
-                val data = appState.data
+                val data = appState.data as List<Word>
                 if (data.isNullOrEmpty()) {
                     showAlertDialog(
                         getString(R.string.dialog_tittle_sorry),
@@ -91,6 +84,39 @@ class MainActivity : AppCompatActivity(), View {
                 showAlertDialog(getString(R.string.error_stub), appState.error.message)
             }
         }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.history_menu, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.menu_history -> {
+                toHistoryScreen()
+                true
+            }
+            android.R.id.home -> {
+                onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun toHistoryScreen() {
+        supportFragmentManager.beginTransaction()
+            .add(R.id.root_layout, HistoryFragment.newInstance())
+            .addToBackStack(null)
+            .commit()
+    }
+
+    private fun toDescriptionScreen(word: Word) {
+        supportFragmentManager.beginTransaction()
+            .add(R.id.root_layout, DescriptionFragment.newInstance(word))
+            .addToBackStack(null)
+            .commit()
     }
 
     private fun showViewWorking() {

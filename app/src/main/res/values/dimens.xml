@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     //Margins
-
     <dimen name="hairline">1px</dimen>
     <dimen name="margin_xxxx_small">2dp</dimen>
     <dimen name="margin_xxx_small">3dp</dimen>
