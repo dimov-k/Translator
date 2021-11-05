@@ -1,47 +1,40 @@
 package ru.mrroot.translator.view.main
 
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import ru.mrroot.translator.model.entity.AppState
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import ru.mrroot.translator.data.AppState
+import ru.mrroot.translator.utils.parseSearchResults
+import ru.mrroot.translator.viewmodel.BaseViewModel
 
-class MainViewModel(private val interactor: MainInteractor) : ViewModel() {
+class MainViewModel(private val interactor: MainInteractor) :
+    BaseViewModel<AppState>() {
 
-    private val liveData: MutableLiveData<AppState> = MutableLiveData()
-    private val viewModelCoroutineScope = CoroutineScope(
-        Dispatchers.Main
-                + SupervisorJob()
-                + CoroutineExceptionHandler { _, throwable ->
-            handleError(throwable)
-        })
+    private val liveDataForViewToObserve: LiveData<AppState> = _mutableLiveData
 
-    private fun cancelJob() {
-        viewModelCoroutineScope.coroutineContext.cancelChildren()
+    fun subscribe(): LiveData<AppState> {
+        return liveDataForViewToObserve
     }
 
-    fun getLiveData(): LiveData<AppState> {
-        return liveData
+    override fun getData(word: String, isOnline: Boolean) {
+        _mutableLiveData.value = AppState.Loading(null)
+        cancelJob()
+        viewModelCoroutineScope.launch { startInteractor(word, isOnline) }
+    }
+
+    private suspend fun startInteractor(word: String, isOnline: Boolean) =
+        withContext(Dispatchers.IO) {
+            _mutableLiveData.postValue(parseSearchResults(interactor.getData(word, isOnline)))
+        }
+
+    override fun handleError(error: Throwable) {
+        _mutableLiveData.postValue((AppState.Error(error)))
     }
 
     override fun onCleared() {
+        _mutableLiveData.value = AppState.Success(null)
         super.onCleared()
-        liveData.value = AppState.Success(null)
-        cancelJob()
-    }
-
-    private fun handleError(error: Throwable) {
-        liveData.postValue(AppState.Error(error))
-    }
-
-    fun getData(word: String, isOnline: Boolean) {
-        if (word.isNullOrEmpty()) {
-            return
-        }
-
-        liveData.value = AppState.Loading(null)
-        cancelJob()
-        viewModelCoroutineScope.launch { liveData.postValue(interactor.getData(word)) }
     }
 
 }

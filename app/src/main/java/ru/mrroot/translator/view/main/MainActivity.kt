@@ -1,89 +1,75 @@
 package ru.mrroot.translator.view.main
 
+import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View.GONE
-import android.view.View.VISIBLE
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
+import android.view.View
+import org.koin.androidx.viewmodel.ext.android.viewModel
 import ru.mrroot.translator.R
+import ru.mrroot.translator.data.AppState
+import ru.mrroot.translator.data.word.Word
 import ru.mrroot.translator.databinding.ActivityMainBinding
-import ru.mrroot.translator.model.entity.AppState
-import ru.mrroot.translator.model.entity.Word
-import ru.mrroot.translator.utils.ui.AlertDialogFragment
-import ru.mrroot.translator.view.base.View
-import ru.mrroot.translator.view.description.DescriptionFragment
-import ru.mrroot.translator.view.history.HistoryFragment
-import org.koin.android.viewmodel.ext.android.viewModel
+import ru.mrroot.translator.utils.convertMeaningsToString
+import ru.mrroot.translator.utils.isOnline
+import ru.mrroot.translator.view.base.BaseActivity
+import ru.mrroot.translator.view.description.DescriptionActivity
+import ru.mrroot.translator.view.history.HistoryActivity
+import ru.mrroot.translator.view.main.adapter.MainAdapter
 
-class MainActivity : AppCompatActivity(), View {
+class MainActivity : BaseActivity<AppState, MainInteractor>() {
 
-    private val viewModel: MainViewModel by viewModel()
-    private val adapter: MainAdapter by lazy { MainAdapter(listItemClickListener) }
-    private var _binding: ActivityMainBinding? = null
-    private val vb get() = _binding!!
-
-    private val listItemClickListener: (Word) -> Unit = { word ->
-            toDescriptionScreen(word)
-    }
-
-    private val textWatcher = object : TextWatcher {
-        override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-            if (!vb.searchEditText.text.isNullOrEmpty()) {
-                vb.searchButton.isEnabled = true
-                vb.clearTextImageView.visibility = VISIBLE
-            } else {
-                vb.searchButton.isEnabled = false
-                vb.clearTextImageView.visibility = GONE
+    private lateinit var binding: ActivityMainBinding
+    override lateinit var model: MainViewModel
+    private val adapter: MainAdapter by lazy { MainAdapter(onListItemClickListener) }
+    private val fabClickListener: View.OnClickListener =
+        View.OnClickListener {
+            fromRemote = true
+            val searchDialogFragment = SearchDialogFragment.newInstance()
+            searchDialogFragment.setOnSearchClickListener(onSearchClickListener)
+            searchDialogFragment.show(supportFragmentManager, BOTTOM_SHEET_FRAGMENT_DIALOG_TAG)
+        }
+    private val onListItemClickListener: MainAdapter.OnListItemClickListener =
+        object : MainAdapter.OnListItemClickListener {
+            override fun onItemClick(data: Word) = showDescription(data)
+        }
+    private val onSearchClickListener: SearchDialogFragment.OnSearchClickListener =
+        object : SearchDialogFragment.OnSearchClickListener {
+            override fun onClick(searchWord: String) {
+                isNetworkAvailable = isOnline(applicationContext)
+                if (isNetworkAvailable) {
+                    model.getData(searchWord, fromRemote)
+                } else {
+                    showNoInternetConnectionDialog()
+                }
             }
         }
 
-        override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
-        override fun afterTextChanged(s: Editable) {}
-    }
+    private var fromRemote = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        _binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(vb.root)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        viewModel.getLiveData().observe(this@MainActivity, { renderData(it) })
-
-        vb.mainActivityRv.layoutManager = LinearLayoutManager(applicationContext)
-        vb.mainActivityRv.adapter = adapter
-
-        vb.searchEditText.addTextChangedListener(textWatcher)
-        vb.clearTextImageView.setOnClickListener { vb.searchEditText.text = null }
-        vb.searchButton.setOnClickListener {
-            viewModel.getData(vb.searchEditText.text.toString(), true)
-        }
+        initViewModel()
+        initViews()
     }
 
-    override fun renderData(appState: AppState) {
-        when (appState) {
-            is AppState.Success<*> -> {
-                showViewWorking()
-                val data = appState.data as List<Word>
-                if (data.isNullOrEmpty()) {
-                    showAlertDialog(
-                        getString(R.string.dialog_tittle_sorry),
-                        getString(R.string.empty_server_response_on_success)
-                    )
-                } else {
-                    adapter.setData(data)
-                }
-            }
-            is AppState.Loading -> {
-                showViewLoading()
-            }
-            is AppState.Error -> {
-                showViewWorking()
-                showAlertDialog(getString(R.string.error_stub), appState.error.message)
-            }
-        }
+    private fun showDescription(data: Word) {
+        startActivity(
+            DescriptionActivity.getIntent(
+                this@MainActivity,
+                data.text!!,
+                convertMeaningsToString(data.meanings!!),
+                data.meanings[0].imageUrl
+            )
+        )
+    }
+
+    override fun setDataToAdapter(data: List<Word>) {
+        adapter.setData(data)
+        if (!fromRemote) showDescription(data = data[0])
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -94,45 +80,37 @@ class MainActivity : AppCompatActivity(), View {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.menu_history -> {
-                toHistoryScreen()
+                startActivity(Intent(this, HistoryActivity::class.java))
                 true
             }
-            android.R.id.home -> {
-                onBackPressed()
+            R.id.menu_search_room -> {
+                fromRemote = false
+                val searchDialogFragment = SearchDialogFragment.newInstance()
+                searchDialogFragment.setOnSearchClickListener(onSearchClickListener)
+                searchDialogFragment.show(supportFragmentManager, BOTTOM_SHEET_FRAGMENT_DIALOG_TAG)
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
-    private fun toHistoryScreen() {
-        supportFragmentManager.beginTransaction()
-            .add(R.id.root_layout, HistoryFragment.newInstance())
-            .addToBackStack(null)
-            .commit()
+    private fun initViewModel() {
+        if (binding.mainActivityRecyclerview.adapter != null) {
+            throw IllegalStateException("The ViewModel should be initialised first")
+        }
+        val viewModel: MainViewModel by viewModel()
+        model = viewModel
+        model.subscribe().observe(this@MainActivity, { renderData(it) })
     }
 
-    private fun toDescriptionScreen(word: Word) {
-        supportFragmentManager.beginTransaction()
-            .add(R.id.root_layout, DescriptionFragment.newInstance(word))
-            .addToBackStack(null)
-            .commit()
-    }
-
-    private fun showViewWorking() {
-        vb.loadingFrameLayout.visibility = GONE
-    }
-
-    private fun showAlertDialog(title: String?, message: String?) {
-        AlertDialogFragment.newInstance(title, message)
-            .show(supportFragmentManager, DIALOG_FRAGMENT_TAG)
-    }
-
-    private fun showViewLoading() {
-        vb.loadingFrameLayout.visibility = VISIBLE
+    private fun initViews() {
+        binding.searchFab.setOnClickListener(fabClickListener)
+        binding.mainActivityRecyclerview.adapter = adapter
     }
 
     companion object {
-        private const val DIALOG_FRAGMENT_TAG = "74a54328-5d62-46bf-ab6b-cbf5d8c79522"
+        private const val BOTTOM_SHEET_FRAGMENT_DIALOG_TAG =
+            "74a54328-5d62-46bf-ab6b-cbf5fgt0-092395"
     }
+
 }

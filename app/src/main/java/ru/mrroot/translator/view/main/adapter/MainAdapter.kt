@@ -1,25 +1,28 @@
 package ru.mrroot.translator.view.main.adapter
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import ru.mrroot.translator.databinding.ActivityMainItemBinding
-import ru.mrroot.translator.model.data.DataModel
+import ru.mrroot.translator.R
+import ru.mrroot.translator.data.word.Word
+import ru.mrroot.translator.utils.convertMeaningsToString
 
-class MainAdapter(private var itemClickListener: ((DataModel) -> Unit)?) :
+class MainAdapter(private var onListItemClickListener: OnListItemClickListener) :
     RecyclerView.Adapter<MainAdapter.RecyclerItemViewHolder>() {
 
-    private var data: List<DataModel> = arrayListOf()
+    private var data: List<Word> = arrayListOf()
 
-    fun setData(data: List<DataModel>) {
+    fun setData(data: List<Word>) {
         this.data = data
         notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerItemViewHolder {
         return RecyclerItemViewHolder(
-            ActivityMainItemBinding
-                .inflate(LayoutInflater.from(parent.context), parent, false)
+            LayoutInflater.from(parent.context)
+                .inflate(R.layout.activity_main_recyclerview_item, parent, false) as View
         )
     }
 
@@ -31,20 +34,23 @@ class MainAdapter(private var itemClickListener: ((DataModel) -> Unit)?) :
         return data.size
     }
 
-    inner class RecyclerItemViewHolder(private val vb: ActivityMainItemBinding) :
-        RecyclerView.ViewHolder(vb.root) {
+    inner class RecyclerItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
-        private lateinit var data: DataModel
-
-        init {
-            itemView.setOnClickListener { itemClickListener?.invoke(data) }
+        fun bind(data: Word) {
+            if (layoutPosition != RecyclerView.NO_POSITION) {
+                itemView.findViewById<TextView>(R.id.header_textview_recycler_item).text = data.text
+                itemView.findViewById<TextView>(R.id.description_textview_recycler_item).text =
+                    convertMeaningsToString(data.meanings)
+                itemView.setOnClickListener { openInNewWindow(data) }
+            }
         }
+    }
 
-        fun bind(data: DataModel) {
-            this.data = data
-            vb.headerTextviewRv.text = data.text
-            vb.descriptionTextviewRv.text = data.meanings?.get(0)?.translation?.translation
-            vb.transcriptionTextviewRv.text = data.meanings?.get(0)?.transcription
-        }
+    private fun openInNewWindow(listItemData: Word) {
+        onListItemClickListener.onItemClick(listItemData)
+    }
+
+    interface OnListItemClickListener {
+        fun onItemClick(data: Word)
     }
 }

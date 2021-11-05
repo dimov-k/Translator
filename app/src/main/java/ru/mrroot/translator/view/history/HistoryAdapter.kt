@@ -1,25 +1,28 @@
 package ru.mrroot.translator.view.history
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import ru.mrroot.translator.databinding.FragmentHistoryRvItemBinding
-import ru.mrroot.translator.model.entity.room.HistoryEntity
+import ru.mrroot.translator.R
+import ru.mrroot.translator.data.word.Word
+import ru.mrroot.translator.view.main.adapter.MainAdapter
 
-class HistoryAdapter(private var itemClickListener: ((HistoryEntity) -> Unit)?) :
+class HistoryAdapter(private var onListItemClickListener: MainAdapter.OnListItemClickListener) :
     RecyclerView.Adapter<HistoryAdapter.RecyclerItemViewHolder>() {
 
-    private var data: List<HistoryEntity> = arrayListOf()
+    private var data: List<Word> = arrayListOf()
 
-    fun setData(data: List<HistoryEntity>) {
+    fun setData(data: List<Word>) {
         this.data = data
         notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerItemViewHolder {
         return RecyclerItemViewHolder(
-            FragmentHistoryRvItemBinding
-                .inflate(LayoutInflater.from(parent.context), parent, false)
+            LayoutInflater.from(parent.context)
+                .inflate(R.layout.activity_history_recyclerview_item, parent, false) as View
         )
     }
 
@@ -31,18 +34,22 @@ class HistoryAdapter(private var itemClickListener: ((HistoryEntity) -> Unit)?) 
         return data.size
     }
 
-    inner class RecyclerItemViewHolder(private val vb: FragmentHistoryRvItemBinding) :
-        RecyclerView.ViewHolder(vb.root) {
+    inner class RecyclerItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
-        private lateinit var data: HistoryEntity
-
-        init {
-            itemView.setOnClickListener { itemClickListener?.invoke(data) }
+        fun bind(data: Word) {
+            if (layoutPosition != RecyclerView.NO_POSITION) {
+                itemView.findViewById<TextView>(R.id.header_history_textview_recycler_item).text =
+                    data.text
+                itemView.setOnClickListener { openInNewWindow(data) }
+            }
         }
+    }
 
-        fun bind(data: HistoryEntity) {
-            this.data = data
-            vb.headerHistoryTextviewRecyclerItem.text = data.word
-        }
+    private fun openInNewWindow(listItemData: Word) {
+        onListItemClickListener.onItemClick(listItemData)
+    }
+
+    interface OnListItemClickListener {
+        fun onItemClick(data: Word)
     }
 }

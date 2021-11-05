@@ -1,5 +1,5 @@
-package ru.mrroot.translator.viewModel
+package ru.mrroot.translator.viewmodel
 
 interface Interactor<T> {
-    suspend fun getData(word: String): T
+    suspend fun getData(word: String, fromRemoteSource: Boolean): T
 }

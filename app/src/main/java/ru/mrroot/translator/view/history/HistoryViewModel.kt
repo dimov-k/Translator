@@ -1,41 +1,46 @@
 package ru.mrroot.translator.view.history
 
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import ru.mrroot.translator.model.entity.AppState
-import kotlinx.coroutines.*
+import kotlinx.coroutines.launch
+import ru.mrroot.translator.data.AppState
+import ru.mrroot.translator.utils.parseSearchResults
+import ru.mrroot.translator.viewmodel.BaseViewModel
 
-class HistoryViewModel(private val interactor: HistoryInteractor) : ViewModel() {
+class HistoryViewModel(private val interactor: HistoryInteractor) :
+    BaseViewModel<AppState>() {
 
-    private val liveData: MutableLiveData<AppState> = MutableLiveData()
-    private val viewModelCoroutineScope = CoroutineScope(
-        Dispatchers.Main
-                + SupervisorJob()
-                + CoroutineExceptionHandler { _, throwable ->
-            handleError(throwable)
-        })
+    private val liveDataForViewToObserve: LiveData<AppState> = _mutableLiveData
 
-    private fun cancelJob() {
-        viewModelCoroutineScope.coroutineContext.cancelChildren()
+    fun subscribe(): LiveData<AppState> {
+        return liveDataForViewToObserve
     }
 
-    fun getLiveData(): LiveData<AppState> = liveData
+    override fun getData(word: String, isOnline: Boolean) {
+        _mutableLiveData.value = AppState.Loading(null)
+        cancelJob()
+        viewModelCoroutineScope.launch { startInteractor(word, isOnline) }
+    }
+
+    private suspend fun startInteractor(word: String, isOnline: Boolean) {
+        _mutableLiveData.postValue(parseSearchResults(interactor.getData(word, isOnline)))
+    }
+
+    fun getAllData() {
+        _mutableLiveData.value = AppState.Loading(null)
+        cancelJob()
+        viewModelCoroutineScope.launch { startInteractorAll() }
+    }
+
+    private suspend fun startInteractorAll() {
+        _mutableLiveData.postValue(parseSearchResults(interactor.getAllData()))
+    }
+
+    override fun handleError(error: Throwable) {
+        _mutableLiveData.postValue(AppState.Error(error))
+    }
 
     override fun onCleared() {
+        _mutableLiveData.value = AppState.Success(null)//Set View to original state in onStop
         super.onCleared()
-        liveData.value = AppState.Success(null)
-        cancelJob()
     }
-
-    private fun handleError(error: Throwable) {
-        liveData.postValue(AppState.Error(error))
-    }
-
-    fun getData() {
-        liveData.value = AppState.Loading(null)
-        cancelJob()
-        viewModelCoroutineScope.launch { liveData.postValue(interactor.getHistory()) }
-    }
-
 }
